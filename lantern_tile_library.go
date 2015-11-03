@@ -7,6 +7,8 @@ import "fmt"
 import "strings"
 import "strconv"
 
+import "github.com/julienschmidt/httprouter"
+
 type TagSetInfoStruct struct {
   PDH string
   Version int
@@ -26,6 +28,7 @@ var gCGF []TmpStruct
 
 //====
 
+/*
 func api_tile_library_init() {
   gTagSets = make([]TagSetInfoStruct, 0, 3)
   gTagSetIdx = make(map[string]int)
@@ -44,112 +47,131 @@ func api_tile_library_init() {
     gCGF = append(gCGF, TmpStruct{Name:fmt.Sprintf("%04x", path), Path:path, StepPerPath: 101+path})
   }
 }
+*/
 
 //====
 
-func handle_tile_library_tag_sets(w http.ResponseWriter, r *http.Request) {
+func handle_tile_library_tag_sets(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
   if gVerboseFlag { log.Printf("tile-library/tag-sets") }
 
-  io.WriteString(w,`[`)
-  for i:=0; i<len(gTagSets); i++ {
-    if i>0 { io.WriteString(w,`,`) }
-    io.WriteString(w,`"` + gTagSets[i].PDH + `"`)
+  count := 0
+  io.WriteString(w,"[")
+  for pdh := range gConfig.O["tagset"].O {
+
+    if count>0 { io.WriteString(w,",") }
+    io.WriteString(w, fmt.Sprintf(`"%s"`, gConfig.O["tagset"].O[pdh].O["pdh"].S))
+    count++
+
   }
-  io.WriteString(w,`]`)
+  io.WriteString(w,"]")
+
 }
 
 //====
 
-func handle_tile_library_tag_sets_id(w http.ResponseWriter, r *http.Request) {
-  if gVerboseFlag { log.Printf("tile-library/tag-sets") }
+func handle_tile_library_tag_sets_id(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+  pdh := params.ByName("tagset_id")
 
-  //DEBUG
-  var pdh string = "1c20dd595e9fd3d8eefb281e314709ec+67"
+  if gVerboseFlag { log.Printf("tile-library/tag-sets/%v", pdh) }
 
-  var idx int
   var ok bool
 
-  if idx,ok = gTagSetIdx[pdh] ; !ok {
+  if _,ok = gConfig.O["tagset"].O[pdh] ; !ok {
     io.WriteString(w,`{}`)
     return
   }
 
-  io.WriteString(w, fmt.Sprintf(`{"tag-set-identifier":"%s","tag-set-integer":%02d}`, gTagSets[idx].PDH, gTagSets[idx].Version))
+  io.WriteString(w, fmt.Sprintf(`{"tag-set-identifier":"%s","tag-set-integer":%d}`,
+    gConfig.O["tagset"].O[pdh].O["pdh"].S,
+    int(gConfig.O["tagset"].O[pdh].O["id"].P + 0.5)))
 }
 
 //====
 
-func handle_tile_library_tag_sets_id_paths(w http.ResponseWriter, r *http.Request) {
-
-  //DEBUG
-  var pdh string = "1c20dd595e9fd3d8eefb281e314709ec+67"
+func handle_tile_library_tag_sets_id_paths(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+  pdh := params.ByName("tagset_id")
 
   if gVerboseFlag { log.Printf("tile-library/tag-sets/%v", pdh) }
 
   //var idx int
   var ok bool
 
-  if _,ok = gTagSetIdx[pdh] ; !ok {
+  if _,ok = gConfig.O["tagset"].O[pdh] ; !ok {
     io.WriteString(w,`[]`)
     return
   }
 
-
   io.WriteString(w,`[`)
-  for i:=0; i<len(gCGF); i++ {
-    if i>0 { io.WriteString(w, `,`) }
-    io.WriteString(w, fmt.Sprintf(`%04x`, i))
+  n := len(gConfig.O["tagset"].O[pdh].O["step_per_path"].L)
+  for i:=0; i<n; i++ {
+    if i>0 { io.WriteString(w,",") }
+    io.WriteString(w,fmt.Sprintf(`%d`, i))
   }
   io.WriteString(w,`]`)
+
 }
 
 //====
 
-func handle_tile_library_tag_sets_id_paths_id(w http.ResponseWriter, r *http.Request) {
+func handle_tile_library_tag_sets_id_paths_id(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+  pdh := params.ByName("tagset_id")
+  path_str := params.ByName("path_id")
 
-  //DEBUG
-  var pdh string = "1c20dd595e9fd3d8eefb281e314709ec+67"
-  path := 0x2c5
-  //DEBUG
-
+  _path,e := strconv.ParseInt(path_str, 16, 64)
+  if e!=nil {
+    io.WriteString(w,`{}`)
+    return
+  }
+  path:=int(_path)
 
   if gVerboseFlag { log.Printf("tile-library/tag-sets/%v/paths-id/%x", pdh, path) }
 
-  //var idx int
   var ok bool
 
-  if _,ok = gTagSetIdx[pdh] ; !ok {
+  if _,ok = gConfig.O["tagset"].O[pdh] ; !ok {
+    io.WriteString(w,`[]`)
+    return
+  }
+
+  step_per_path := gConfig.O["tagset"].O[pdh].O["step_per_path"].L
+
+  if (path<0) || (path>=len(step_per_path)) {
     io.WriteString(w,`{}`)
     return
   }
 
-  if (path<0) || (path>=len(gCGF)) {
-    io.WriteString(w,`{}`)
-  }
-
-  cgf := gCGF[path]
-  io.WriteString(w, fmt.Sprintf(`{"path":%04x,"num-positions":%d"}`, cgf.Path, cgf.StepPerPath))
+  io.WriteString(w, fmt.Sprintf(`{"path":%d,"num-positions":%d}`,
+    path, int(step_per_path[path].P+0.5) ))
 }
 
 //====
 
-func handle_tile_library_tag_sets_id_tile_positions(w http.ResponseWriter, r *http.Request) {
+func handle_tile_library_tag_sets_id_tile_positions(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+  pdh := params.ByName("tagset_id")
 
-  //DEBUG
-  var pdh string = "1c20dd595e9fd3d8eefb281e314709ec+67"
-  //DEBUG
-
+  var ok bool
+  if _,ok = gConfig.O["tagset"].O[pdh] ; !ok {
+    io.WriteString(w,`[]`)
+    return
+  }
 
   if gVerboseFlag { log.Printf("tile-library/tag-sets/%v/tile-positions", pdh) }
 
-  tagset:=0
+  tagset_id := int(gConfig.O["tagset"].O[pdh].O["id"].P+0.5)
+
+  count:=0
 
   io.WriteString(w,`[`)
-  count:=0
-  for path:=0; path<len(gCGF); path++ {
-    for step:=0; step<gCGF[path].StepPerPath; step++ {
-      if count>0 { io.WriteString(w,`,`) }
-      io.WriteString(w, fmt.Sprintf(`"%02x.%04x.%04x"`,tagset,path,step))
+  step_per_path := gConfig.O["tagset"].O[pdh].O["step_per_path"].L
+  n := len(step_per_path)
+  for i:=0; i<n; i++ {
+
+    spp := int(step_per_path[i].P+0.5)
+
+    for j:=0; j<spp; j++ {
+      if count>0 { io.WriteString(w,",") }
+      io.WriteString(w,fmt.Sprintf(`"%02x.%04x.%04x"`, tagset_id, i,j))
+      count++
     }
   }
   io.WriteString(w,`]`)
@@ -158,15 +180,17 @@ func handle_tile_library_tag_sets_id_tile_positions(w http.ResponseWriter, r *ht
 
 //===
 
-func handle_tile_library_tag_sets_id_tile_positions_id(w http.ResponseWriter, r *http.Request) {
-
-  //DEBUG
-  var pdh string = "1c20dd595e9fd3d8eefb281e314709ec+67"
-  tilepos := "00.2c5.001c"
-  //DEBUG
-
+func handle_tile_library_tag_sets_id_tile_positions_id(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+  pdh := params.ByName("tagset_id")
+  tilepos := params.ByName("tilepos_id")
 
   if gVerboseFlag { log.Printf("tile-library/tag-sets/%v/tile-positions/%v", pdh, tilepos) }
+
+  var ok bool
+  if _,ok = gConfig.O["tagset"].O[pdh] ; !ok {
+    io.WriteString(w,`{}`)
+    return
+  }
 
   parts := strings.Split(tilepos, `.`)
   if len(parts)!=3 {
@@ -177,17 +201,19 @@ func handle_tile_library_tag_sets_id_tile_positions_id(w http.ResponseWriter, r 
   _tagset,e := strconv.ParseInt(parts[0], 16, 64)
   if e!=nil { io.WriteString(w,`{}`) ; return ; }
 
-  _path,e := strconv.ParseInt(parts[0], 16, 64)
+  _path,e := strconv.ParseInt(parts[1], 16, 64)
   if e!=nil { io.WriteString(w,`{}`) ; return ; }
 
-  _step,e := strconv.ParseInt(parts[0], 16, 64)
+  _step,e := strconv.ParseInt(parts[2], 16, 64)
   if e!=nil { io.WriteString(w,`{}`) ; return ; }
 
   tagset := int(_tagset) ; _ = tagset
   path := int(_path) ; _ = path
   step := int(_step) ; _ = step
 
-  if (path<0) || (path>=len(gCGF)) { io.WriteString(w,`{}`) ; return ; }
+  step_per_path := gConfig.O["tagset"].O[pdh].O["step_per_path"].L
+
+  if (path<0) || (path>=len(step_per_path)) { io.WriteString(w,`{}`) ; return ; }
 
   //DEBUG
   n_tile_variant := 23
@@ -195,10 +221,12 @@ func handle_tile_library_tag_sets_id_tile_positions_id(w http.ResponseWriter, r 
   n_genome := 3
   //DEBUG
 
+  r_tilepos := fmt.Sprintf("%02x.%04x.%04x", tagset, path, step)
+
   io.WriteString(w,`{`)
   io.WriteString(w,
     fmt.Sprintf(`"tile-position":"%s","total-tile-variants":%d,"well-sequenced-tile-variants":%d,"num-genomes":%d`,
-      tilepos,
+      r_tilepos,
       n_tile_variant,
       n_tile_well_sequenced,
       n_genome))
@@ -208,7 +236,7 @@ func handle_tile_library_tag_sets_id_tile_positions_id(w http.ResponseWriter, r 
 
 //===
 
-func handle_tile_library_tag_sets_id_tile_positions_id_locus(w http.ResponseWriter, r *http.Request) {
+func handle_tile_library_tag_sets_id_tile_positions_id_locus(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 
   //DEBUG
   var pdh string = "1c20dd595e9fd3d8eefb281e314709ec+67"
@@ -257,7 +285,7 @@ func handle_tile_library_tag_sets_id_tile_positions_id_locus(w http.ResponseWrit
 
 //===
 
-func handle_tile_library_tag_sets_id_tile_variants(w http.ResponseWriter, r *http.Request) {
+func handle_tile_library_tag_sets_id_tile_variants(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 
   //DEBUG
   var pdh string = "1c20dd595e9fd3d8eefb281e314709ec+67"
@@ -281,7 +309,7 @@ func handle_tile_library_tag_sets_id_tile_variants(w http.ResponseWriter, r *htt
 
 //===
 
-func handle_tile_library_tag_sets_id_tile_variants_id(w http.ResponseWriter, r *http.Request) {
+func handle_tile_library_tag_sets_id_tile_variants_id(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 
   //DEBUG
   var pdh string = "1c20dd595e9fd3d8eefb281e314709ec+67"
@@ -296,8 +324,8 @@ func handle_tile_library_tag_sets_id_tile_variants_id(w http.ResponseWriter, r *
     "tag-length": 24,
     "start-tag": "gccaaggagttttaaaactactga",
     "end-tag": "",
-    "is-start-of-path": False,
-    "is-end-of-path": True,
+    "is-start-of-path": false,
+    "is-end-of-path": true,
     "sequence" : "gccaaggagttttaaaactactgatgcccacctcccacacccaaaagtctgattaattgatctagggtatggcctgagcttcaagagtttttaaagcatccaggtgattacaatgtgtagtgaagtttgagagccactgcacaacattaataattgttgggagaaagactgtggctttagctagggagagctgtccagaagatctgaatgtcaggagagagactagtgagagatttggaaaccatcaacatattgatggtaactgaagccacagaagtggacaacactgccttaggagaagatgccaaataacaagagagtagatacaaagacattttgacataacaaagtatggttacagaaatattttcaggtggaaaggaagttgaaggga",
     "md5sum": "bc952f709d7419f7e103daa2b7e469a9",
     "length": 394,
@@ -313,7 +341,7 @@ func handle_tile_library_tag_sets_id_tile_variants_id(w http.ResponseWriter, r *
 
 //===
 
-func handle_tile_library_tag_sets_id_tile_variants_id_locus(w http.ResponseWriter, r *http.Request) {
+func handle_tile_library_tag_sets_id_tile_variants_id_locus(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 
   //DEBUG
   var pdh string = "1c20dd595e9fd3d8eefb281e314709ec+67"
@@ -342,7 +370,7 @@ func handle_tile_library_tag_sets_id_tile_variants_id_locus(w http.ResponseWrite
 
 //===
 
-func handle_tile_library_tag_sets_id_tile_variants_id_annotations(w http.ResponseWriter, r *http.Request) {
+func handle_tile_library_tag_sets_id_tile_variants_id_annotations(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 
   //DEBUG
   var pdh string = "1c20dd595e9fd3d8eefb281e314709ec+67"

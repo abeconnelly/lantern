@@ -9,6 +9,8 @@ import "github.com/abeconnelly/sloppyjson"
 import "log"
 import "bytes"
 
+import "github.com/julienschmidt/httprouter"
+
 import gouuid "github.com/nu7hatch/gouuid"
 
 var g_req_debug bool = true
@@ -44,7 +46,7 @@ func stat_req_handler(w http.ResponseWriter, sj *sloppyjson.SloppyJSON, conn_inf
 
 }
 
-func handle_json_req(w http.ResponseWriter, r *http.Request) {
+func handle_json_req(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
   var body_reader io.Reader = r.Body
 
   b := bytes.Buffer{}

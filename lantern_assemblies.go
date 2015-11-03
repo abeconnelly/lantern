@@ -4,18 +4,7 @@ import "io"
 import "fmt"
 import "net/http"
 
-type APILocusStruct struct {
-  ChromosomeName string
-  Indexing int
-  StartPosition int
-  EndPosition int
-}
-
-type APIAssembliesStruct struct {
-  Name string
-  PDH string
-  Locus []APILocusStruct
-}
+import "github.com/julienschmidt/httprouter"
 
 var g_assemblies []APIAssembliesStruct
 var g_assemblies_idx_map map[string]int
@@ -30,13 +19,18 @@ func api_assemblies_init(assembly_info []APIAssembliesStruct) {
 }
 
 
-func handle_assemblies_id(w http.ResponseWriter, r *http.Request) {
+func handle_assemblies_id(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
   var body_reader io.Reader = r.Body ; _ = body_reader
 
   assembly_name := "123"
 
   var idx int
   var ok bool
+  if gConfig == nil {
+    io.WriteString(w,"[]")
+    return
+  }
+
   if idx,ok = g_assemblies_idx_map[assembly_name]; !ok {
     io.WriteString(w,"[]")
     return
@@ -56,16 +50,9 @@ func handle_assemblies_id(w http.ResponseWriter, r *http.Request) {
   }
   io.WriteString(w,"]")
 
-
-  /*
-  fmt.Printf("handle_assemblies_id:\n")
-  fmt.Printf("  RequestURI: %s\n", r.RequestURI)
-  fmt.Printf("  Host: %s\n", r.Host)
-  fmt.Printf("  Header: %s\n", r.Header)
-  */
 }
 
-func handle_assemblies(w http.ResponseWriter, r *http.Request) {
+func handle_assemblies(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
   var body_reader io.Reader = r.Body ; _ = body_reader
 
   io.WriteString(w,"[")
@@ -78,11 +65,4 @@ func handle_assemblies(w http.ResponseWriter, r *http.Request) {
   }
   io.WriteString(w,"]")
 
-
-  /*
-  fmt.Printf("handle_assemblies:\n")
-  fmt.Printf("  RequestURI: %s\n", r.RequestURI)
-  fmt.Printf("  Host: %s\n", r.Host)
-  fmt.Printf("  Header: %s\n", r.Header)
-  */
 }

@@ -2,13 +2,14 @@ package main
 
 import "fmt"
 import "os"
+import "io"
 import "runtime"
 import "runtime/pprof"
 
 import "github.com/abeconnelly/autoio"
 import "github.com/codegangsta/cli"
 
-import "net"
+//import "net"
 import "net/http"
 
 import "syscall"
@@ -16,6 +17,11 @@ import "os/signal"
 import "time"
 
 import "log"
+
+import "io/ioutil"
+import "github.com/abeconnelly/sloppyjson"
+
+import "github.com/julienschmidt/httprouter"
 
 var VERSION_STR string = "0.2.0"
 var gVerboseFlag bool
@@ -30,9 +36,35 @@ var gPortStr string = ":8080"
 
 var gLanternStat LanternStatStruct
 
+var gConfig *sloppyjson.SloppyJSON
+
+
+func _load_json_config(config_fn string) error {
+  var e error
+
+  raw_str,err := ioutil.ReadFile(config_fn)
+  if err!=nil { return err }
+
+  gConfig,e = sloppyjson.Loads(string(raw_str))
+  if e!=nil { return e }
+
+  log.Printf("config loaded\n")
+
+  //gConfig.Printr(0,2)
+
+  return nil
+}
+
+func index(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+  io.WriteString(w, `{"message":"lantern API server"}`)
+}
+
 func _main( c *cli.Context ) {
   gLanternStat = LanternStatStruct{}
   gLanternStat.StartTime = time.Now()
+
+  e := _load_json_config(c.String("config"))
+  if e!=nil { log.Fatal(e) }
 
   /*
   if c.String("input") == "" {
@@ -88,16 +120,15 @@ func _main( c *cli.Context ) {
   //
 
 
-
-  listener,err := net.Listen("tcp", gPortStr)
-  if err!=nil { log.Fatal(err) }
+  //listener,err := net.Listen("tcp", gPortStr)
+  //if err!=nil { log.Fatal(err) }
 
   term := make(chan os.Signal,1)
   go func( sig <-chan os.Signal) {
     s := <-sig
     if gVerboseFlag {
       fmt.Printf("caught signal: %v\n", s)
-      listener.Close()
+      //listener.Close()
     }
   }(term)
   signal.Notify(term, syscall.SIGTERM)
@@ -105,14 +136,37 @@ func _main( c *cli.Context ) {
 
   // Set up routing
   //
+  router := httprouter.New()
+
+  router.POST("/", handle_json_req)
+  router.GET("/", index)
+  router.GET("/status", handle_status)
+
+  router.GET("/assemblies", handle_assemblies)
+  router.GET("/assemblies/:id", handle_assemblies_id)
+
+  //router.GET("/callsets", handle_callsets)
+
+  router.GET("/tile-library/tag-sets", handle_tile_library_tag_sets)
+  router.GET("/tile-library/tag-sets/:tagset_id", handle_tile_library_tag_sets_id)
+  router.GET("/tile-library/tag-sets/:tagset_id/paths", handle_tile_library_tag_sets_id_paths)
+  router.GET("/tile-library/tag-sets/:tagset_id/paths/:path_id", handle_tile_library_tag_sets_id_paths_id)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-positions", handle_tile_library_tag_sets_id_tile_positions)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-positions/:tilepos_id", handle_tile_library_tag_sets_id_tile_positions_id)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-positions/:tilepos_id/locus", handle_tile_library_tag_sets_id_tile_positions_id_locus)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants", handle_tile_library_tag_sets_id_tile_variants)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id", handle_tile_library_tag_sets_id_tile_variants_id)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/locus", handle_tile_library_tag_sets_id_tile_variants_id_locus)
+  //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/subsequence", handle_tile_library_tag_sets_id_tile_variants_id_subsequence)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/annotations", handle_tile_library_tag_sets_id_tile_variants_id_annotations)
+
+  /*
   http.HandleFunc("/", handle_json_req)
-
   http.HandleFunc("/status", handle_status)
-
   http.HandleFunc("/assemblies/", handle_assemblies_id)
   http.HandleFunc("/assemblies", handle_assemblies)
+  */
 
-  srv := &http.Server{ Addr: gPortStr }
 
   if gVerboseFlag {
     fmt.Printf("listening: %v\n", gPortStr)
@@ -124,9 +178,11 @@ func _main( c *cli.Context ) {
   z[0].Locus = append(z[0].Locus, APILocusStruct{ ChromosomeName:"13", Indexing:0, StartPosition:0, EndPosition:0 })
   api_assemblies_init(z)
 
-  api_tile_library_init()
+  //api_tile_library_init()
 
-  srv.Serve(listener)
+  //srv := &http.Server{ Addr: gPortStr }
+  //srv.Serve(listener)
+  http.ListenAndServe(gPortStr, router)
 
   if gVerboseFlag {
     fmt.Printf("shutting down\n")
@@ -170,6 +226,12 @@ func main() {
     cli.BoolFlag{
       Name: "pprof",
       Usage: "Profile usage",
+    },
+
+    cli.StringFlag{
+      Name: "config, C",
+      Value: "config.json",
+      Usage: "config file (JSON)",
     },
 
     cli.StringFlag{
