@@ -23,6 +23,9 @@ import "github.com/abeconnelly/sloppyjson"
 
 import "github.com/julienschmidt/httprouter"
 
+import "strings"
+import "strconv"
+
 var VERSION_STR string = "0.2.0"
 var gVerboseFlag bool
 
@@ -38,14 +41,26 @@ var gLanternStat LanternStatStruct
 
 var gConfig *sloppyjson.SloppyJSON
 
+func _skip_space(b string) string {
+  n := len(b)
+  var x byte
 
-func _load_json_config(config_fn string) error {
+  for i:=0; i<n; i++ {
+    x = b[i]
+    if x=='\t' || x==' ' || x=='\n' || x=='\r' { continue }
+    return b[i:]
+  }
+  return ""
+}
+
+func _load_json_config(ctx *LanternContext, config_fn string) error {
   var e error
 
   raw_str,err := ioutil.ReadFile(config_fn)
   if err!=nil { return err }
 
-  gConfig,e = sloppyjson.Loads(string(raw_str))
+  //gConfig,e = sloppyjson.Loads(string(raw_str))
+  ctx.Config,e = sloppyjson.Loads(string(raw_str))
   if e!=nil { return e }
 
   log.Printf("config loaded\n")
@@ -59,12 +74,103 @@ func index(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
   io.WriteString(w, `{"message":"lantern API server"}`)
 }
 
+func load_Assembly(ctx *LanternContext, tagset_pdh, assembly_pdh string) error {
+  assembly_fn := ctx.Config.O["tagset"].O[tagset_pdh].O["assembly"].O[assembly_pdh].O["gz"].S
+  fp,e := autoio.OpenReadScanner(assembly_fn)
+  if e!=nil { return e }
+  defer fp.Close()
+
+  if ctx.Assembly == nil { ctx.Assembly = make(map[string]map[int][]int) }
+  ctx.Assembly[assembly_pdh] = make(map[int][]int)
+
+  if ctx.AssemblyChrom == nil { ctx.AssemblyChrom = make(map[string]map[int]string) }
+  ctx.AssemblyChrom[assembly_pdh] = make(map[int]string)
+
+  path := 0
+  for fp.ReadScan() {
+    l := fp.ReadText()
+
+    if len(l) == 0 { continue }
+    if l[0] == '\n' { continue }
+
+    if l[0] == '>' {
+      parts  := strings.Split(l[1:], ":")
+      name   := parts[0] ; _ = name
+      chrom  := parts[1] ; _ = chrom
+      path_s := parts[2]
+
+      _path,e := strconv.ParseInt(path_s, 16, 64)
+      if e!=nil { return e }
+      path = int(_path)
+
+      ctx.Assembly[assembly_pdh][path] = make([]int, 0, 1024)
+      ctx.AssemblyChrom[assembly_pdh][path] = chrom
+      continue
+    }
+
+    _step,e := strconv.ParseInt(l[0:4], 16, 64)
+    if e!=nil {return e}
+    step := int(_step) ; _ = step
+
+    z := _skip_space(l[5:])
+    _ref_pos,e := strconv.ParseInt(z, 10, 64)
+    if e!=nil {return e}
+    ref_pos := int(_ref_pos)
+
+    ctx.Assembly[assembly_pdh][path] = append(ctx.Assembly[assembly_pdh][path], ref_pos)
+  }
+
+  return nil
+}
+
 func _main( c *cli.Context ) {
   gLanternStat = LanternStatStruct{}
   gLanternStat.StartTime = time.Now()
 
-  e := _load_json_config(c.String("config"))
+
+
+  ctx := &LanternContext{}
+
+  //DEBUG
+  ctx.VerboseFlag = true
+  ctx.PrettyAPIFlag = true
+
+  e := _load_json_config(ctx, c.String("config"))
   if e!=nil { log.Fatal(e) }
+
+  tagset_pdh := "dad7041d432965cd07a4ad8e0aad1b6e"
+  assembly_pdh := "aa39590be6f1812f0a792dd4c86678e8+1348"
+
+  if ctx.VerboseFlag { log.Printf("loading assembly %v (tagset %v)\n", tagset_pdh, assembly_pdh) }
+
+  e = load_Assembly(ctx, tagset_pdh, assembly_pdh)
+  if e!=nil { log.Fatal(e) }
+
+  if ctx.VerboseFlag { log.Printf("assembly loaded\n") }
+
+
+  /*
+  //DEBUG
+  fmt.Printf("testing...\n")
+  for pdh := range ctx.Assembly {
+    for path := range ctx.Assembly[pdh] {
+      for i:=0; i<len(ctx.Assembly[pdh][path]);  i++ {
+        fmt.Printf("%v %v %v\n", pdh, path, ctx.Assembly[pdh][path][i])
+      }
+    }
+
+    os.Exit(0)
+  }
+
+  for pdh := range ctx.AssemblyChrom {
+    for path := range ctx.AssemblyChrom[pdh] {
+      fmt.Printf("%v %v %v\n", pdh, path, ctx.AssemblyChrom[pdh][path])
+    }
+  }
+
+  fmt.Printf("cp\n")
+  */
+
 
   /*
   if c.String("input") == "" {
@@ -142,8 +248,11 @@ func _main( c *cli.Context ) {
   router.GET("/", index)
   router.GET("/status", handle_status)
 
-  router.GET("/assemblies", handle_assemblies)
-  router.GET("/assemblies/:id", handle_assemblies_id)
+  //router.GET("/qux", func(w http.ResponseWriter, r *http.Request, params httprouter.Params) { ctx.Qux(w,r, params); } )
+  router.GET("/qux", ctx.Qux)
+
+  router.GET("/assemblies", ctx.APIAssemblies)
+  router.GET("/assemblies/:id", ctx.APIAssembliesId)
 
   //router.GET("/callsets", handle_callsets)
 
@@ -172,16 +281,6 @@ func _main( c *cli.Context ) {
     fmt.Printf("listening: %v\n", gPortStr)
   }
 
-  //INIT
-  z := []APIAssembliesStruct{}
-  z = append(z, APIAssembliesStruct{Name:"111", PDH:"1c20dd595e9fd3d8eefb281e314709ec+67", Locus:[]APILocusStruct{}})
-  z[0].Locus = append(z[0].Locus, APILocusStruct{ ChromosomeName:"13", Indexing:0, StartPosition:0, EndPosition:0 })
-  api_assemblies_init(z)
-
-  //api_tile_library_init()
-
-  //srv := &http.Server{ Addr: gPortStr }
-  //srv.Serve(listener)
   http.ListenAndServe(gPortStr, router)
 
   if gVerboseFlag {
@@ -212,6 +311,12 @@ func main() {
       Usage: "OUTPUT",
     },
 
+    cli.StringFlag{
+      Name: "config, C",
+      Value: "~/.config/lantern/config.json",
+      Usage: "Config file (default to \"$HOME/.config/lantern/config.json\")",
+    },
+
     cli.IntFlag{
       Name: "max-procs, N",
       Value: -1,
@@ -228,11 +333,13 @@ func main() {
       Usage: "Profile usage",
     },
 
+    /*
     cli.StringFlag{
       Name: "config, C",
       Value: "config.json",
       Usage: "config file (JSON)",
     },
+    */
 
     cli.StringFlag{
       Name: "pprof-file",
