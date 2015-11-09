@@ -41,6 +41,8 @@ var gLanternStat LanternStatStruct
 
 var gConfig *sloppyjson.SloppyJSON
 
+var g_pprof *os.File
+
 func _skip_space(b string) string {
   n := len(b)
   var x byte
@@ -134,6 +136,7 @@ func _main( c *cli.Context ) {
   //DEBUG
   ctx.VerboseFlag = true
   ctx.PrettyAPIFlag = true
+  ctx.VerboseAPIFlag = true
 
   e := _load_json_config(ctx, c.String("config"))
   if e!=nil { log.Fatal(e) }
@@ -145,8 +148,13 @@ func _main( c *cli.Context ) {
 
   e = load_Assembly(ctx, tagset_pdh, assembly_pdh)
   if e!=nil { log.Fatal(e) }
-
   if ctx.VerboseFlag { log.Printf("assembly loaded\n") }
+
+  e = ctx.LoadCGFBytes(ctx.Config.O["cgf"].O["dir"].S)
+  if e!=nil { log.Fatal(e) }
+  if ctx.VerboseFlag { log.Printf("cgf bytes loaded\n") }
+
+  ctx.LoadCGFIntermediate()
 
 
   /*
@@ -212,14 +220,17 @@ func _main( c *cli.Context ) {
   }
 
   if gProfileFlag {
-    prof_f,err := os.Create( gProfileFile )
+    //prof_f,err := os.Create( gProfileFile )
+    var err error
+    g_pprof,err = os.Create(gProfileFile)
     if err != nil {
       fmt.Fprintf( os.Stderr, "Could not open profile file %s: %v\n", gProfileFile, err )
       os.Exit(2)
     }
 
-    pprof.StartCPUProfile( prof_f )
-    defer pprof.StopCPUProfile()
+    //pprof.StartCPUProfile( prof_f )
+    //defer pprof.StopCPUProfile()
+    pprof.StartCPUProfile(g_pprof)
   }
 
   // Start server
@@ -246,7 +257,8 @@ func _main( c *cli.Context ) {
 
   router.POST("/", handle_json_req)
   router.GET("/", index)
-  router.GET("/status", handle_status)
+  //router.GET("/status", handle_status)
+  router.GET("/status", ctx.APIStatus)
 
   //router.GET("/qux", func(w http.ResponseWriter, r *http.Request, params httprouter.Params) { ctx.Qux(w,r, params); } )
   router.GET("/qux", ctx.Qux)
@@ -256,13 +268,23 @@ func _main( c *cli.Context ) {
 
   //router.GET("/callsets", handle_callsets)
 
-  router.GET("/tile-library/tag-sets", handle_tile_library_tag_sets)
-  router.GET("/tile-library/tag-sets/:tagset_id", handle_tile_library_tag_sets_id)
-  router.GET("/tile-library/tag-sets/:tagset_id/paths", handle_tile_library_tag_sets_id_paths)
-  router.GET("/tile-library/tag-sets/:tagset_id/paths/:path_id", handle_tile_library_tag_sets_id_paths_id)
-  router.GET("/tile-library/tag-sets/:tagset_id/tile-positions", handle_tile_library_tag_sets_id_tile_positions)
-  router.GET("/tile-library/tag-sets/:tagset_id/tile-positions/:tilepos_id", handle_tile_library_tag_sets_id_tile_positions_id)
-  router.GET("/tile-library/tag-sets/:tagset_id/tile-positions/:tilepos_id/locus", handle_tile_library_tag_sets_id_tile_positions_id_locus)
+  //router.GET("/tile-library/tag-sets", handle_tile_library_tag_sets)
+  //router.GET("/tile-library/tag-sets/:tagset_id", handle_tile_library_tag_sets_id)
+  //router.GET("/tile-library/tag-sets/:tagset_id/paths", handle_tile_library_tag_sets_id_paths)
+  //router.GET("/tile-library/tag-sets/:tagset_id/paths/:path_id", handle_tile_library_tag_sets_id_paths_id)
+  //router.GET("/tile-library/tag-sets/:tagset_id/tile-positions", handle_tile_library_tag_sets_id_tile_positions)
+  //router.GET("/tile-library/tag-sets/:tagset_id/tile-positions/:tilepos_id", handle_tile_library_tag_sets_id_tile_positions_id)
+  //router.GET("/tile-library/tag-sets/:tagset_id/tile-positions/:tilepos_id/locus", handle_tile_library_tag_sets_id_tile_positions_id_locus)
+
+  router.GET("/tile-library/tag-sets", ctx.APITileLibraryTagSets)
+  router.GET("/tile-library/tag-sets/:tagset_id", ctx.APITileLibraryTagSetsId)
+  router.GET("/tile-library/tag-sets/:tagset_id/paths", ctx.APITileLibraryTagSetsIdPaths)
+  router.GET("/tile-library/tag-sets/:tagset_id/paths/:path_id", ctx.APITileLibraryTagSetsIdPathsId)
+
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-positions", ctx.APITileLibraryTagSetsIdTilePositions)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-positions/:tilepos_id", ctx.APITileLibraryTagSetsIdTilePositionsId)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-positions/:tilepos_id/locus", ctx.APITileLibraryTagSetsIdTilePositionsIdLocus)
+
   router.GET("/tile-library/tag-sets/:tagset_id/tile-variants", handle_tile_library_tag_sets_id_tile_variants)
   router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id", handle_tile_library_tag_sets_id_tile_variants_id)
   router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/locus", handle_tile_library_tag_sets_id_tile_variants_id_locus)
@@ -282,6 +304,12 @@ func _main( c *cli.Context ) {
   }
 
   http.ListenAndServe(gPortStr, router)
+  //listener,err := net.Listen("tcp", gPortStr)
+  //if err!=nil { log.Fatal(err) }
+  //defer listener.Close()
+  //e := http.Serve(listener, router)
+
+
 
   if gVerboseFlag {
     fmt.Printf("shutting down\n")

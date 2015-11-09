@@ -9,7 +9,10 @@ import "github.com/julienschmidt/httprouter"
 import "net/http"
 import "log"
 
+import "github.com/abeconnelly/cgf"
+
 const gAPIVersionString = "0.1.0"
+const gLanternVersion = "0.1.0"
 
 
 type APILocusStruct struct {
@@ -48,8 +51,14 @@ type LanternTileInfo struct {
 type LanternContext struct {
   VerboseFlag bool
   PrettyAPIFlag bool
+  VerboseAPIFlag bool
 
+  Version string
   Config *sloppyjson.SloppyJSON
+
+  CGFBytes [][]byte
+  CGFi []cgf.HeaderIntermediate
+  CGFPathi []cgf.PathIntermediate
 
   // assembly-pdh, path, step
   //
@@ -59,8 +68,8 @@ type LanternContext struct {
   //
   AssemblyChrom map[string]map[int]string
 
-
   // path, step, md5sum
+  //
   TileInfoMap map[int]map[int]map[string]LanternTileInfo
   TileInfo map[int]map[int][]LanternTileInfo
 }

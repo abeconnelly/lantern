@@ -8,6 +8,13 @@ import "log"
 
 import "github.com/julienschmidt/httprouter"
 
+//      __                           _     _ _
+//     / /_ _ ___ ___  ___ _ __ ___ | |__ | (_) ___  ___
+//    / / _` / __/ __|/ _ \ '_ ` _ \| '_ \| | |/ _ \/ __|
+//   / / (_| \__ \__ \  __/ | | | | | |_) | | |  __/\__ \
+//  /_/ \__,_|___/___/\___|_| |_| |_|_.__/|_|_|\___||___/
+//
+
 func (ctx *LanternContext) APIAssemblies(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
   if ctx.VerboseFlag {
     log.Printf("APIAssemblies\n")
@@ -36,6 +43,13 @@ func (ctx *LanternContext) APIAssemblies(w http.ResponseWriter, r *http.Request,
   io.WriteString(w,"]")
 
 }
+
+//      __                           _     _ _              __ _     _
+//     / /_ _ ___ ___  ___ _ __ ___ | |__ | (_) ___  ___   / /(_) __| |
+//    / / _` / __/ __|/ _ \ '_ ` _ \| '_ \| | |/ _ \/ __| / (_) |/ _` |
+//   / / (_| \__ \__ \  __/ | | | | | |_) | | |  __/\__ \/ / _| | (_| |
+//  /_/ \__,_|___/___/\___|_| |_| |_|_.__/|_|_|\___||___/_/ (_)_|\__,_|
+//
 
 func (ctx *LanternContext) APIAssembliesId(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 
@@ -98,6 +112,5 @@ func (ctx *LanternContext) APIAssembliesId(w http.ResponseWriter, r *http.Reques
     }
   }
   io.WriteString(w,"]")
-
 
 }
