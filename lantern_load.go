@@ -5,6 +5,8 @@ import "io/ioutil"
 import "github.com/abeconnelly/cgf"
 //import "github.com/abeconnelly/cglf"
 
+import "strings"
+
 func (ctx *LanternContext) LoadCGFIntermediate() {
   for i:=0; i<len(ctx.CGFBytes); i++ {
     hdri,_ := cgf.HeaderIntermediateFromBytes(ctx.CGFBytes[i])
@@ -18,7 +20,25 @@ func (ctx *LanternContext) LoadCGFIntermediate() {
   }
 }
 
+func (ctx *LanternContext) CGFNameMap(fn string) string {
+  if fn[0]=='h' && fn[1]=='u' {
+    z := strings.Split(fn, ".")
+    return "hupgp-" + z[0]
+  }
+
+  if strings.Contains(fn, "cg_data") {
+    z := strings.Split(fn, ".")
+    return "okg-" + z[0]
+  }
+
+  return fn
+}
+
 func (ctx *LanternContext) LoadCGFBytes(cgf_dir string) error {
+
+  if ctx.CGFIndexMap == nil {
+    ctx.CGFIndexMap = make(map[string]int)
+  }
 
   files,e := ioutil.ReadDir(cgf_dir)
   if e!=nil { return e }
@@ -26,6 +46,9 @@ func (ctx *LanternContext) LoadCGFBytes(cgf_dir string) error {
   ctx.CGFBytes = make([][]byte, 0, 1024)
 
   for _,f := range files {
+
+    ctx.CGFIndexMap[ ctx.CGFNameMap(f.Name()) ] = len(ctx.CGFBytes)
+
     cgf_bytes,e := ioutil.ReadFile(cgf_dir + "/" + f.Name())
     if e!=nil { return e }
     ctx.CGFBytes = append(ctx.CGFBytes, cgf_bytes)

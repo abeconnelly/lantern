@@ -308,13 +308,15 @@ func _main(c *cli.Context) {
   router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/locus", ctx.APITileLibraryTagSetsIdTileVariantsIdLocus)
 
 
+  router.GET("/callsets/:callset_id/tile-variants", ctx.APICallsetsIdTileVariants)
+
   //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants", handle_tile_library_tag_sets_id_tile_variants)
   //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id", handle_tile_library_tag_sets_id_tile_variants_id)
   //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/locus", handle_tile_library_tag_sets_id_tile_variants_id_locus)
 
   //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/subsequence", handle_tile_library_tag_sets_id_tile_variants_id_subsequence)
 
-  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/annotations", handle_tile_library_tag_sets_id_tile_variants_id_annotations)
+  //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/annotations", handle_tile_library_tag_sets_id_tile_variants_id_annotations)
 
   /*
   http.HandleFunc("/", handle_json_req)

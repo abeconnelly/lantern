@@ -77,6 +77,8 @@ type LanternContext struct {
   TileInfoMap map[int]map[int]map[string]LanternTileInfo
   TileInfo map[int]map[int][]LanternTileInfo
   TileMap []cgf.TileMapEntry
+
+  CGFIndexMap map[string]int
 }
 
 func (ctx *LanternContext) Qux(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
