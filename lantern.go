@@ -82,6 +82,8 @@ func load_Assembly(ctx *LanternContext, tagset_pdh, assembly_pdh string) error {
   if e!=nil { return e }
   defer fp.Close()
 
+  log.Printf(">>>> loading assembly: %s\n", assembly_pdh)
+
   if ctx.Assembly == nil { ctx.Assembly = make(map[string]map[int][]int) }
   ctx.Assembly[assembly_pdh] = make(map[int][]int)
 
@@ -125,7 +127,7 @@ func load_Assembly(ctx *LanternContext, tagset_pdh, assembly_pdh string) error {
   return nil
 }
 
-func _main( c *cli.Context ) {
+func _main(c *cli.Context) {
   gLanternStat = LanternStatStruct{}
   gLanternStat.StartTime = time.Now()
 
@@ -144,7 +146,7 @@ func _main( c *cli.Context ) {
   tagset_pdh := "dad7041d432965cd07a4ad8e0aad1b6e"
   assembly_pdh := "aa39590be6f1812f0a792dd4c86678e8+1348"
 
-  if ctx.VerboseFlag { log.Printf("loading assembly %v (tagset %v)\n", tagset_pdh, assembly_pdh) }
+  if ctx.VerboseFlag { log.Printf("loading assembly %v (tagset %v)\n", assembly_pdh, tagset_pdh) }
 
   e = load_Assembly(ctx, tagset_pdh, assembly_pdh)
   if e!=nil { log.Fatal(e) }
@@ -155,6 +157,21 @@ func _main( c *cli.Context ) {
   if ctx.VerboseFlag { log.Printf("cgf bytes loaded\n") }
 
   ctx.LoadCGFIntermediate()
+
+  for sglf_name,_ := range ctx.Config.O["tagset"].O[tagset_pdh].O["sglf"].O {
+    _path,e := strconv.ParseInt(sglf_name, 16, 64)
+    if e!=nil { log.Fatal(e) }
+
+    ipath := int(_path)
+    ctx.LoadSGLF(ipath, ctx.Config.O["tagset"].O[tagset_pdh].O["sglf"].O[sglf_name].S)
+
+  }
+
+  log.Printf("PreCalc starting...\n")
+
+  ctx.PreCalc()
+
+  log.Printf("PreCalc done\n")
 
 
   /*
@@ -259,6 +276,7 @@ func _main( c *cli.Context ) {
   router.GET("/", index)
   //router.GET("/status", handle_status)
   router.GET("/status", ctx.APIStatus)
+  router.GET("/cgf-stats", ctx.CGFSimpleStats)
 
   //router.GET("/qux", func(w http.ResponseWriter, r *http.Request, params httprouter.Params) { ctx.Qux(w,r, params); } )
   router.GET("/qux", ctx.Qux)
@@ -285,10 +303,17 @@ func _main( c *cli.Context ) {
   router.GET("/tile-library/tag-sets/:tagset_id/tile-positions/:tilepos_id", ctx.APITileLibraryTagSetsIdTilePositionsId)
   router.GET("/tile-library/tag-sets/:tagset_id/tile-positions/:tilepos_id/locus", ctx.APITileLibraryTagSetsIdTilePositionsIdLocus)
 
-  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants", handle_tile_library_tag_sets_id_tile_variants)
-  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id", handle_tile_library_tag_sets_id_tile_variants_id)
-  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/locus", handle_tile_library_tag_sets_id_tile_variants_id_locus)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants", ctx.APITileLibraryTagSetsIdTileVariants)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id", ctx.APITileLibraryTagSetsIdTileVariantsId)
+  router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/locus", ctx.APITileLibraryTagSetsIdTileVariantsIdLocus)
+
+
+  //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants", handle_tile_library_tag_sets_id_tile_variants)
+  //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id", handle_tile_library_tag_sets_id_tile_variants_id)
+  //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/locus", handle_tile_library_tag_sets_id_tile_variants_id_locus)
+
   //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/subsequence", handle_tile_library_tag_sets_id_tile_variants_id_subsequence)
+
   router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/annotations", handle_tile_library_tag_sets_id_tile_variants_id_annotations)
 
   /*

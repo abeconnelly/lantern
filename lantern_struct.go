@@ -10,6 +10,7 @@ import "net/http"
 import "log"
 
 import "github.com/abeconnelly/cgf"
+import "github.com/abeconnelly/cglf"
 
 const gAPIVersionString = "0.1.0"
 const gLanternVersion = "0.1.0"
@@ -57,14 +58,17 @@ type LanternContext struct {
   Config *sloppyjson.SloppyJSON
 
   CGFBytes [][]byte
+  CGFPath [][]cgf.PathIntermediate
   CGFi []cgf.HeaderIntermediate
   CGFPathi []cgf.PathIntermediate
+
+  SGLF cglf.SGLF
 
   // assembly-pdh, path, step
   //
   Assembly map[string]map[int][]int
 
-  // assembly-0pdh, path, chromosome name ('chr' prefix)
+  // assembly-pdh, path, chromosome name ('chr' prefix)
   //
   AssemblyChrom map[string]map[int]string
 
@@ -72,6 +76,7 @@ type LanternContext struct {
   //
   TileInfoMap map[int]map[int]map[string]LanternTileInfo
   TileInfo map[int]map[int][]LanternTileInfo
+  TileMap []cgf.TileMapEntry
 }
 
 func (ctx *LanternContext) Qux(w http.ResponseWriter, r *http.Request, params httprouter.Params) {

@@ -8,6 +8,7 @@ import "strings"
 import "strconv"
 
 import "github.com/julienschmidt/httprouter"
+import "github.com/abeconnelly/cgf"
 
 type TagSetInfoStruct struct {
   PDH string
@@ -193,7 +194,7 @@ func (ctx *LanternContext) APITileLibraryTagSetsIdTilePositionsId(w http.Respons
   }
 
   if len(tilepos) == 0 {
-    send_error_bad_request(w, "invalid tagset id")
+    send_error_bad_request(w, "invalid tilepos")
     return
   }
 
@@ -245,16 +246,48 @@ func (ctx *LanternContext) APITileLibraryTagSetsIdTilePositionsId(w http.Respons
 
   //TODO: get this information
   // this is a placeholder for now
-  n_tile_var:=-1
-  n_hiq_tile_var:=-1
-  n_genomes:=-1
+  //n_tile_var:=-1
+  //n_hiq_tile_var:=-1
+  n_genomes := len(ctx.CGFBytes)
 
-  io.WriteString(w,`{`)
+  // SLOW AND MEMORY INTENSIVE
+  //
+  n_sample := len(ctx.CGFPath)
+
+  if req_path >= len(ctx.CGFPath[0]) {
+    send_error_bad_request(w, "step out of range")
+    return
+  }
+
+  //tcount := make([]int, n_sample)
+
+  tmap := make(map[string]bool)
+  loq_tmap := make(map[string]bool)
+
+  for sample:=0; sample<n_sample; sample++ {
+    knot := cgf.GetKnot(ctx.TileMap, ctx.CGFPath[sample][req_path], req_step)
+
+    for i:=0; i<len(knot); i++ {
+      for j:=0; j<len(knot[i]); j++ {
+
+        s := fmt.Sprintf("%04x.%02x.%04x.%03x+%x", req_path, 0, knot[i][j].Step, knot[i][j].VarId, knot[i][j].Span)
+
+        if len(knot[i][j].NocallStartLen)==0 {
+          tmap[s] = true
+        } else {
+          loq_tmap[s] = true
+        }
+      }
+    }
+  }
+
+
+  io.WriteString(w, `{`)
   io.WriteString(w, fmt.Sprintf(`"tile-position":"%s"`, tilepos_str))
-  io.WriteString(w, fmt.Sprintf(`,"total-tile-variants":%d`, n_tile_var))
-  io.WriteString(w, fmt.Sprintf(`,"well-sequenced-tile-variants":%d`, n_hiq_tile_var))
+  io.WriteString(w, fmt.Sprintf(`,"total-tile-variants":%d`, len(tmap) + len(loq_tmap)))
+  io.WriteString(w, fmt.Sprintf(`,"well-sequenced-tile-variants":%d`, len(tmap)))
   io.WriteString(w, fmt.Sprintf(`,"num-genomes":%d`, n_genomes))
-  io.WriteString(w,`}`)
+  io.WriteString(w, `}`)
 
 }
 
@@ -263,8 +296,9 @@ func (ctx *LanternContext) APITileLibraryTagSetsIdTilePositionsIdLocus(w http.Re
   tagset_id := param.ByName("tagset_id")
   tilepos := param.ByName("tilepos_id")
 
-  req_assembly_name := param.ByName("assembly-name")
-  req_assembly_pdh := param.ByName("assembly-pdh")
+
+  req_assembly_name := r.FormValue("assembly-name")
+  req_assembly_pdh := r.FormValue("assembly-pdh")
 
   if _,ok := ctx.Config.O["tagset"].O[tagset_id] ; !ok {
     send_error_bad_request(w, "invalid tagset id")
@@ -328,6 +362,45 @@ func (ctx *LanternContext) APITileLibraryTagSetsIdTilePositionsIdLocus(w http.Re
   start_position := -1
   end_position := -1
 
+  chrom = ctx.AssemblyChrom[req_assembly_pdh][req_path]
+
+  if _,ok := ctx.Assembly[req_assembly_pdh] ; !ok {
+    log.Printf( fmt.Sprintf("req_assembly %s, not in ctx.Assembly\n", req_assembly_pdh))
+    send_error_bad_request(w, "invalid assembly")
+  }
+
+  if _,ok := ctx.Assembly[req_assembly_pdh][req_path] ; !ok {
+    log.Printf( fmt.Sprintf("req_path %d not in req_assembly %, ctx.Assembly\n", req_path, req_assembly_pdh))
+    send_error_bad_request(w, "invalid path")
+  }
+
+  if req_step<0 || req_step>=len(ctx.Assembly[req_assembly_pdh][req_path]) {
+    log.Printf( fmt.Sprintf("req_step oob %d (%d), req_path %d not in req_assembly %, ctx.Assembly",
+      req_step, len(ctx.Assembly[req_assembly_pdh][req_path]), req_path, req_assembly_pdh))
+    send_error_bad_request(w, "invalid step")
+  }
+
+
+  end_position = ctx.Assembly[req_assembly_pdh][req_path][req_step]
+  if req_step==0 {
+
+    if req_path==0 {
+      start_position=0
+    } else {
+
+      other_chrom := ctx.AssemblyChrom[req_assembly_pdh][req_path-1]
+      if other_chrom != chrom {
+        start_position = 0
+      } else {
+        n := len(ctx.Assembly[req_assembly_pdh][req_path-1])
+        start_position = ctx.Assembly[req_assembly_pdh][req_path-1][n-1]
+      }
+    }
+  } else {
+    n := len(ctx.Assembly[req_assembly_pdh][req_path-1])
+    start_position = ctx.Assembly[req_assembly_pdh][req_path-1][n-1]
+  }
+
 
   io.WriteString(w,`[`)
   for i:=0; i<1; i++ {
@@ -344,6 +417,165 @@ func (ctx *LanternContext) APITileLibraryTagSetsIdTilePositionsIdLocus(w http.Re
 
 }
 
+func (ctx *LanternContext) APITileLibraryTagSetsIdTileVariants(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
+}
+
+func (ctx *LanternContext) APITileLibraryTagSetsIdTileVariantsId(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
+
+  tagset_id := param.ByName("tagset_id")
+  tilevariant_id := param.ByName("tilevariant_id")
+
+  if _,ok := ctx.Config.O["tagset"].O[tagset_id] ; !ok {
+    send_error_bad_request(w, "invalid tagset id")
+    return
+  }
+
+  if len(tilevariant_id) == 0 {
+    send_error_bad_request(w, "invalid tilevariant id")
+    return
+  }
+
+  tile_parts := strings.Split(tilevariant_id, ".")
+  if len(tile_parts)!=4 {
+    log.Printf(">>>> %s\n", tilevariant_id)
+    send_error_bad_request(w, "invalid tilepos")
+    return
+  }
+
+  _req_tagset_name,e := strconv.ParseInt(tile_parts[0], 16, 64)
+  if e!=nil {
+    send_error_bad_request(w, "invalid tagset id")
+    return
+  }
+
+  _req_path,e := strconv.ParseInt(tile_parts[1], 16, 64)
+  if e!=nil {
+    send_error_bad_request(w, "invalid path id")
+    return
+  }
+
+  _req_step,e := strconv.ParseInt(tile_parts[2], 16, 64)
+  if e!=nil {
+    send_error_bad_request(w, "invalid step id")
+    return
+  }
+
+  req_tagset_name := int(_req_tagset_name)
+  req_path := int(_req_path)
+  req_step := int(_req_step)
+  req_md5sum := tile_parts[3]
+
+  if ctx.VerboseFlag {
+    log.Printf("APITileLibraryTagSetsIdTileVariantsId %v, tilevariant_id %v, tagset %d, path %d, step %d, md5sum %s\n",
+      tagset_id, tilevariant_id, req_tagset_name, req_path, req_step, req_md5sum)
+  }
+
+  if req_path<0 || req_path>=len(ctx.Config.O["tagset"].O[tagset_id].O["step_per_path"].L) {
+    send_error_bad_request(w, "path out of range")
+    return
+  }
+
+  if req_step<0 || req_step>=int(ctx.Config.O["tagset"].O[tagset_id].O["step_per_path"].L[req_path].P+0.5) {
+    send_error_bad_request(w, "step out of range")
+    return
+  }
+
+  sglf_info,ok := ctx.SGLF.MD5Lookup[req_md5sum] ; _ = sglf_info
+  if !ok {
+    send_error_bad_request(w, "invalid md5sum")
+    return
+  }
+
+  rank := sglf_info.Variant
+  seq := ctx.SGLF.Lib[req_path][req_step][rank]
+
+  first_tile := "false"
+  last_tile := "false"
+
+
+  n:=len(seq)
+
+  pfx := seq[0:24]
+  sfx := seq[n-24:]
+
+  if req_step==0 {
+    first_tile = "true"
+    pfx = ""
+  }
+
+  if req_step==999999 {
+    last_tile = "true"
+    sfx = ""
+  }
+
+  het_count:=0
+  hom_count:=0
+  haplotype_count:=0
+  count:=0
+  n_sample := len(ctx.CGFPath)
+  for sample:=0; sample<n_sample; sample++ {
+    knot := cgf.GetKnot(ctx.TileMap, ctx.CGFPath[sample][req_path], req_step)
+
+    allele_found_count := 0
+    for i:=0; i<len(knot); i++ {
+      cur_step := req_step
+      for j:=0; j<len(knot[i]); j++ {
+        if cur_step < req_step {
+          cur_step += knot[i][j].Step
+          continue
+        }
+        if cur_step > req_step { break }
+
+        if knot[i][j].VarId == rank {
+          allele_found_count++
+        }
+        break
+      }
+    }
+
+    if allele_found_count>0 {
+      count++
+    }
+
+    if allele_found_count==1 {
+      het_count++
+    } else {
+      hom_count++
+    }
+
+    haplotype_count+=allele_found_count
+  }
+
+  ratio := float64(count)/float64(n_sample)
+
+  io.WriteString(w,`{`)
+  io.WriteString(w, fmt.Sprintf(`"tile-variant":"%02x.%04x.%04x.%s",`, req_tagset_name, req_path, req_step, req_md5sum))
+  io.WriteString(w, fmt.Sprintf(`"tag-length":24,`))
+  io.WriteString(w, fmt.Sprintf(`"start-tag":"%s",`, pfx))
+  io.WriteString(w, fmt.Sprintf(`"end-tag":"%s",`, sfx))
+  io.WriteString(w, fmt.Sprintf(`"is-start-of-path":%s,`, first_tile))
+  io.WriteString(w, fmt.Sprintf(`"is-end-of-path":%s,`, last_tile))
+  io.WriteString(w, fmt.Sprintf(`"sequence":"%s",`, seq))
+  io.WriteString(w, fmt.Sprintf(`"md5sum":"%s",`, req_md5sum))
+  io.WriteString(w, fmt.Sprintf(`"length":%d,`, len(seq)))
+  io.WriteString(w, fmt.Sprintf(`"number-of-positions-spanned":%d,`, sglf_info.Span))
+  io.WriteString(w, fmt.Sprintf(`"populateion-frequency":%f,`, ratio))
+  io.WriteString(w, fmt.Sprintf(`"homozygous-count":%d,`, hom_count))
+  io.WriteString(w, fmt.Sprintf(`"heterozygous-count":%d,`, het_count))
+  io.WriteString(w, fmt.Sprintf(`"haplotype-count":%d,`, haplotype_count))
+  io.WriteString(w, fmt.Sprintf(`"population-count":%d,`, count))
+  io.WriteString(w, fmt.Sprintf(`"population-total":%d`, n_sample))
+  io.WriteString(w,`}`)
+
+
+  //tagset_name := int(ctx.Config.O["tagset"].O[tagset_id].O["id"].P+0.5)
+  //tilepos_str := fmt.Sprintf("%02x.%04x.%04x", tagset_name, req_path, req_step)
+
+
+}
+
+func (ctx *LanternContext) APITileLibraryTagSetsIdTileVariantsIdLocus(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
+}
 
 //================================
 //================================

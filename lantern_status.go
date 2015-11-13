@@ -21,7 +21,7 @@ func (ctx *LanternContext) APIStatus(w http.ResponseWriter, r *http.Request, par
     io.WriteString(w, fmt.Sprintf(`  "lantern-version":"%s"` + "\n",  gLanternVersion))
     io.WriteString(w,"}\n")
 
-    ctx.CGFSimpleStats()
+    //ctx.CGFSimpleStats()
 
   } else {
     io.WriteString(w,`{"api-version":"` + gAPIVersionString + `"}`)
@@ -29,8 +29,12 @@ func (ctx *LanternContext) APIStatus(w http.ResponseWriter, r *http.Request, par
 }
 
 
-func (ctx *LanternContext) CGFSimpleStats() {
-  fmt.Printf("start\n")
+func (ctx *LanternContext) CGFSimpleStats(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+  if ctx.VerboseFlag { log.Printf("cgf-stats") }
+
+  non_count := 0
+  tot_count := 0
+
   for ii:=0; ii<len(ctx.CGFPathi); ii++ {
 
     pathi := ctx.CGFPathi[ii]
@@ -38,22 +42,24 @@ func (ctx *LanternContext) CGFSimpleStats() {
     count:=0
     for i:=0; i<len(pathi.VecUint64); i++ {
       u := (pathi.VecUint64[i]>>32)
-
       for j:=uint32(0); j<32; j++ {
         if (u&(1<<j)) > 0 { count++; }
       }
-
     }
 
-    c_count := len(pathi.VecUint64)*32 - count ; _ = c_count
-
+    non_count += count
+    tot_count += len(pathi.VecUint64)*32
   }
 
-  fmt.Printf("end\n")
+  can_count := tot_count - non_count
 
-  pprof.StartCPUProfile(g_pprof)
-  pprof.StopCPUProfile()
-  os.Exit(0)
+  io.WriteString(w, `{`)
+  io.WriteString(w, fmt.Sprintf(`"pop-count":%d,`, len(ctx.CGFPathi)))
+  io.WriteString(w, fmt.Sprintf(`"pop-count":%d,`, len(ctx.CGFPathi)))
+  io.WriteString(w, fmt.Sprintf(`"total-rough-non-canonical-count":%d,`, non_count))
+  io.WriteString(w, fmt.Sprintf(`"total-rough-canonical-count":%d,`, can_count))
+  io.WriteString(w, fmt.Sprintf(`"total-rough-tile-count":%d`, tot_count))
+  io.WriteString(w, `}`)
 
 }
 
