@@ -10,6 +10,43 @@ import "crypto/md5"
 import "github.com/abeconnelly/cgf"
 import "github.com/julienschmidt/httprouter"
 
+func (ctx *LanternContext) APICallsets(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
+  if ctx.VerboseFlag {
+    log.Printf("APICallsets\n")
+  }
+
+  count:=0
+  io.WriteString(w, `[`)
+  for x,_ := range ctx.CGFIndexMap {
+    if count>0 { io.WriteString(w, `,`) }
+    io.WriteString(w, fmt.Sprintf(`"%s"`, x))
+    count++
+  }
+  io.WriteString(w, `]`)
+}
+
+func (ctx *LanternContext) APICallsetsId(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
+  callset_name := param.ByName("callset_id")
+
+  if ctx.VerboseFlag {
+    log.Printf("APICallsetsId callset_id %v\n", callset_name)
+  }
+
+  if _,ok := ctx.CGFIndexMap[callset_name] ; !ok {
+    send_error_bad_request(w, "invalid tagset id")
+    return
+  }
+
+  callset_idx := ctx.CGFIndexMap[callset_name] ; _ = callset_idx
+  callset_loc := ctx.Config.O["cgf"].L[callset_idx].O["locator"].S
+
+  io.WriteString(w, `{`)
+  io.WriteString(w, fmt.Sprintf(`"callset-name":"%s",`,callset_name))
+  io.WriteString(w, fmt.Sprintf(`"callset-locator":"%s"`,callset_loc))
+  io.WriteString(w, `}`)
+
+}
+
 func (ctx *LanternContext) APICallsetsIdTileVariants(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
 
   callset_name := param.ByName("callset_id")

@@ -34,7 +34,26 @@ func (ctx *LanternContext) CGFNameMap(fn string) string {
   return fn
 }
 
-func (ctx *LanternContext) LoadCGFBytes(cgf_dir string) error {
+func (ctx *LanternContext) LoadCGFBytesConfig() error {
+  ctx.CGFBytes = make([][]byte, 0, 1024)
+  if ctx.CGFIndexMap == nil {
+    ctx.CGFIndexMap = make(map[string]int)
+  }
+
+  for idx:=0; idx<len(ctx.Config.O["cgf"].L); idx++ {
+    cgf_name := ctx.Config.O["cgf"].L[idx].O["name"].S
+    cgf_locator := ctx.Config.O["cgf"].L[idx].O["locator"].S
+
+    ctx.CGFIndexMap[cgf_name] = len(ctx.CGFBytes)
+    cgf_bytes,e := ioutil.ReadFile(cgf_locator)
+    if e!=nil { return e }
+    ctx.CGFBytes = append(ctx.CGFBytes, cgf_bytes)
+  }
+
+  return nil
+}
+
+func (ctx *LanternContext) LoadCGFBytesDir(cgf_dir string) error {
 
   if ctx.CGFIndexMap == nil {
     ctx.CGFIndexMap = make(map[string]int)

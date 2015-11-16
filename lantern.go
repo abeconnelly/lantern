@@ -152,7 +152,8 @@ func _main(c *cli.Context) {
   if e!=nil { log.Fatal(e) }
   if ctx.VerboseFlag { log.Printf("assembly loaded\n") }
 
-  e = ctx.LoadCGFBytes(ctx.Config.O["cgf"].O["dir"].S)
+  //e = ctx.LoadCGFBytes(ctx.Config.O["cgf"].O["dir"].S)
+  e = ctx.LoadCGFBytesConfig()
   if e!=nil { log.Fatal(e) }
   if ctx.VerboseFlag { log.Printf("cgf bytes loaded\n") }
 
@@ -308,6 +309,8 @@ func _main(c *cli.Context) {
   router.GET("/tile-library/tag-sets/:tagset_id/tile-variants/:tilevariant_id/locus", ctx.APITileLibraryTagSetsIdTileVariantsIdLocus)
 
 
+  router.GET("/callsets", ctx.APICallsets)
+  router.GET("/callsets/:callset_id", ctx.APICallsetsId)
   router.GET("/callsets/:callset_id/tile-variants", ctx.APICallsetsIdTileVariants)
 
   //router.GET("/tile-library/tag-sets/:tagset_id/tile-variants", handle_tile_library_tag_sets_id_tile_variants)
